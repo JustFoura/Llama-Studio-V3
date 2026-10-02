@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http: https:">
+  <title>Llama Studio</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">LS</span> Llama Studio</div>
+    <div class="server-group">
+      <button id="btnStart" class="btn btn-primary">Start Server</button>
+      <button id="btnStop" class="btn btn-danger" disabled>Stop</button>
+      <div id="statusBadge" class="badge badge-idle">Idle</div>
+      <div id="statusDetail" class="status-detail">not running</div>
+      <div class="metric" title="Prompt processing speed (tokens per second)">PP <b id="metricPrompt">--</b> t/s</div>
+      <div class="metric" title="Token generation speed (tokens per second)">TG <b id="metricGen">--</b> t/s</div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="section">
+        <h2>Presets</h2>
+        <label>Saved preset
+          <select id="presetList"></select>
+        </label>
+        <input id="presetName" type="text" placeholder="Preset name, e.g. 'Gemma phone'">
+        <div class="actions">
+          <button id="btnPresetSave" class="btn btn-small btn-primary">Save as preset</button>
+          <button id="btnPresetLoad" class="btn btn-small">Load</button>
+          <button id="btnPresetDelete" class="btn btn-small btn-danger">Delete</button>
+        </div>
+        <button id="btnResetDefaults" class="btn btn-small btn-ghost">Reset all to recommended defaults</button>
+        <div id="presetFeedback" class="feedback"></div>
+        <p class="note">A preset snapshots every setting on this page (model paths, address, sampling, image settings).</p>
+      </section>
+
+      <section class="section">
+        <h2>Server</h2>
+        <label>API address <span class="tip" data-help="Address for the local API and phone control page. The default is local-only; enter this computer's LAN/VPN address to allow phone access.">?</span>
+          <input id="apiAddress" type="text" placeholder="http://127.0.0.1:1234">
+        </label>
+        <div class="row">
+          <label>Threads <span class="tip" data-help="CPU threads during generation. 0 = auto (uses all cores). Recommended: 0.">?</span>
+            <input id="threads" type="number" min="0" max="128">
+          </label>
+          <label>Batch threads <span class="tip" data-help="CPU threads during prompt/batch processing. 0 = auto (same as Threads).">?</span>
+            <input id="threadsBatch" type="number" min="0" max="128">
+          </label>
+        </div>
+        <p class="note">Phone page (all presets/models, tap to switch): open the <b>API address</b> above in your phone browser.</p>
+      </section>
+
+      <section class="section">
+        <h2>Model</h2>
+        <label>Models folder <span class="tip" data-help="Folder that holds your .gguf files. Drop models and mmproj files here, then pick them below.">?</span>
+          <input id="modelsDir" type="text" placeholder="folder containing .gguf files">
+        </label>
+        <label>Model (.gguf) <span class="tip" data-help="The main language model. Choose from the Models folder or Browse for any file.">?</span>
+          <select id="model"></select>
+          <button id="btnBrowseModel" class="btn btn-small">Browse…</button>
+        </label>
+        <label>Vision encoder (mmproj) <span class="tip" data-help="Only needed for vision/multimodal models. Lets the model see images.">?</span>
+          <input id="mmproj" type="text" placeholder="model_vis.gguf">
+          <button id="btnBrowseMmproj" class="btn btn-small">Browse…</button>
+        </label>
+        <label class="mb0">Or HuggingFace <span class="tip" data-help="Download a model straight from HuggingFace (-hf repo:subfolder/file.gguf). Example: unsloth/Qwen3.6-27B-MTP-GGUF:Q4_K_S">?</span>
+          <input id="hfModel" type="text" placeholder="unsloth/Qwen3.6-27B-MTP-GGUF:Q4_K_S">
+        </label>
+      </section>
+
+      <section class="section">
+        <h2>Performance</h2>
+        <div class="row">
+          <label>Context <span class="tip" data-help="Context size in tokens (-c). More = longer conversations but more memory. Recommended: 8192.">?</span>
+            <input id="context" type="number" min="256" step="256">
+          </label>
+          <label>GPU layers <span class="tip" data-help="Layers offloaded to VRAM (-ngl). 99 = all. Lower if you run out of video memory. Recommended: 99.">?</span>
+            <input id="ngl" type="number" min="0" max="200">
+          </label>
+        </div>
+        <div class="row">
+          <label>Batch <span class="tip" data-help="Prompt processing batch size (-b). Recommended: 2048.">?</span>
+            <input id="batchSize" type="number" min="1">
+          </label>
+          <label>UBatch <span class="tip" data-help="Micro-batch size (-ub). Recommended: 512.">?</span>
+            <input id="ubatch" type="number" min="1">
+          </label>
+          <label>Parallel slots <span class="tip" data-help="Concurrent requests (-np). 1 for a single user. MTP requires 1.">?</span>
+            <input id="parallel" type="number" min="1" max="16">
+          </label>
+        </div>
+        <label class="check"><input id="flashAttention" type="checkbox"> Flash attention <span class="tip" data-help="Faster and more memory-efficient attention. Keep ON.">?</span></label>
+        <div class="row">
+          <label>Cache K <span class="tip" data-help="KV cache precision for K. q8_0 = good balance of speed/quality/VRAM. f16 = highest quality.">?</span>
+            <select id="cacheTypeK"></select>
+          </label>
+          <label>Cache V <span class="tip" data-help="KV cache precision for V. q8_0 = good balance. f16 = highest quality.">?</span>
+            <select id="cacheTypeV"></select>
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Generation</h2>
+        <div class="row2">
+          <label>Temperature <span class="tip" data-help="Randomness of output. Higher = more creative, lower = more predictable. Recommended: 1.0.">?</span>
+            <input id="temp" type="number" step="0.01">
+          </label>
+          <label>Top-P <span class="tip" data-help="Nucleus sampling: cut off the least likely tokens. Recommended: 0.95.">?</span>
+            <input id="topP" type="number" step="0.01" min="0" max="1">
+          </label>
+          <label>Top-K <span class="tip" data-help="Only sample from the top K tokens. 0 = off. Recommended: 40.">?</span>
+            <input id="topK" type="number" min="0">
+          </label>
+          <label>Min-P <span class="tip" data-help="Ignore tokens below this probability. Recommended: 0.05.">?</span>
+            <input id="minP" type="number" step="0.01" min="0" max="1">
+          </label>
+          <label>Repeat pen <span class="tip" data-help="Penalize repeating the same tokens. 1.0 = off. Set 0 in the app to disable (sent as 1.0). Recommended: 1.1.">?</span>
+            <input id="repeatPenalty" type="number" step="0.01">
+          </label>
+          <label>Presence pen <span class="tip" data-help="Penalize tokens already used, encourages new topics. Recommended: 0.">?</span>
+            <input id="presencePenalty" type="number" step="0.01">
+          </label>
+          <label>Freq pen <span class="tip" data-help="Penalize frequently used tokens. Recommended: 0.">?</span>
+            <input id="frequencyPenalty" type="number" step="0.01">
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>MTP (Multi-Token Prediction)</h2>
+        <p class="note">Uses the MTP head built into the model file (e.g. <code>unsloth/*-MTP-GGUF</code>), or a separate MTP head file you attach below. Incompatible with mmproj, DFlash and parallel &gt; 1.</p>
+        <label class="check"><input id="mtpEnabled" type="checkbox"> Enable MTP <span class="tip" data-help="Faster generation using the MTP head. Runs --spec-type draft-mtp. Requires an MTP-converted model or a separate MTP head file.">?</span></label>
+        <div class="row">
+          <label>Draft N <span class="tip" data-help="Draft tokens per step. Recommended: 3.">?</span>
+            <input id="mtpNMax" type="number" min="1" max="10">
+          </label>
+        </div>
+        <label class="mb0">MTP model file (optional) <span class="tip" data-help="For models that ship the MTP head as a separate .gguf rather than built-in. If set, runs --spec-draft-model with this file. Leave empty to use the head built into the main model.">?</span>
+          <input id="mtpModel" type="text" placeholder="mtp-head.gguf (optional)">
+          <button id="btnBrowseMtpModel" class="btn btn-small">Browse…</button>
+        </label>
+      </section>
+
+      <section class="section">
+        <h2>DFlash (speculative decoding)</h2>
+        <p class="note">Block-diffusion speculative decoding using a separate DFlash draft model (e.g. <code>Qwen3-4B-DFlash.gguf</code>). Requires a DFlash GGUF. Incompatible with MTP and mmproj.</p>
+        <label class="check"><input id="dflashEnabled" type="checkbox"> Enable DFlash <span class="tip" data-help="Faster generation using a DFlash block-diffusion draft model. Runs --spec-type draft-dflash with your DFlash model file.">?</span></label>
+        <div class="row">
+          <label>Draft N <span class="tip" data-help="Draft tokens per step. Recommended: 15 (clamped to the draft model's trained block size).">?</span>
+            <input id="dflashNMax" type="number" min="1" max="64">
+          </label>
+        </div>
+        <label class="mb0">DFlash model (.gguf) <span class="tip" data-help="The DFlash draft model file (e.g. Qwen3-4B-DFlash.gguf). Passed via --spec-draft-model.">?</span>
+          <input id="dflashModel" type="text" placeholder="Qwen3-4B-DFlash.gguf">
+          <button id="btnBrowseDflash" class="btn btn-small">Browse…</button>
+        </label>
+      </section>
+
+      <section class="section">
+        <h2>Vision / Image</h2>
+        <label class="check"><input id="mmprojOffload" type="checkbox"> Offload mmproj to GPU <span class="tip" data-help="Run the vision encoder on the GPU. Keep ON unless you run out of VRAM.">?</span></label>
+        <div class="row">
+          <label>Image min tokens <span class="tip" data-help="Minimum tokens per image (--image-min-tokens). -1 = model default.">?</span>
+            <input id="imageMinTokens" type="number" min="-1">
+          </label>
+          <label>Image max tokens <span class="tip" data-help="Maximum tokens per image (--image-max-tokens). Higher = better image quality, more VRAM. -1 = model default.">?</span>
+            <input id="imageMaxTokens" type="number" min="-1">
+          </label>
+          <label>Encode batch tokens <span class="tip" data-help="Image tokens processed per batch (--mtmd-batch-max-tokens). Recommended: 1024.">?</span>
+            <input id="mtmdBatchMaxTokens" type="number" min="0">
+          </label>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Reasoning / Thinking</h2>
+        <div class="row">
+          <label>Mode <span class="tip" data-help="Thinking mode: auto = model decides, on = always think first, off = never think.">?</span>
+            <select id="reasoning">
+              <option value="auto">auto</option>
+              <option value="on">on</option>
+              <option value="off">off</option>
+            </select>
+          </label>
+          <label>Budget <span class="tip" data-help="Max thinking tokens. -1 = unlimited.">?</span>
+            <input id="reasoningBudget" type="number" min="-1">
+          </label>
+          <label>Effort <span class="tip" data-help="Reasoning effort for models that support it (e.g. Qwen3.8, gpt-oss, DeepSeek V4). Passed to the model's chat template via --chat-template-kwargs reasoning_effort. Default = model's own default. Models without reasoning_effort support ignore it.">?</span>
+            <select id="reasoningEffort">
+              <option value="">default</option>
+              <option value="low">low</option>
+              <option value="medium">medium</option>
+              <option value="high">high</option>
+              <option value="max">max</option>
+            </select>
+          </label>
+        </div>
+        <label class="check"><input id="preserveReasoning" type="checkbox"> Preserve thinking trace <span class="tip" data-help="Keep the full thinking text in the conversation history (--reasoning-preserve).">?</span></label>
+      </section>
+
+      <section class="section">
+        <h2>Advanced</h2>
+        <label>llama-server path <span class="tip" data-help="Path to llama-server.exe. Auto-detected - only change if you moved it.">?</span>
+          <input id="serverPath" type="text">
+        </label>
+        <label class="check"><input id="jinja" type="checkbox"> Use Jinja chat template <span class="tip" data-help="Use the model's own chat template (--jinja). Keep ON for modern models.">?</span></label>
+        <label>Extra args <span class="tip" data-help="Extra llama-server arguments for power users. Example: --lora lora.gguf --seed 42">?</span>
+          <textarea id="extraArgs" rows="2" placeholder="--lora lora.gguf --seed 42"></textarea>
+        </label>
+        <div class="actions">
+          <button id="btnSave" class="btn">Save config</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="content">
+      <div class="tabs">
+        <button class="tab active" data-tab="logs">Logs</button>
+        <button class="tab" data-tab="chat">Playground (API)</button>
+        <button class="tab" data-tab="info">Help</button>
+      </div>
+
+      <div id="tab-logs" class="tabpage">
+        <div id="log" class="log"></div>
+      </div>
+
+      <div id="tab-chat" class="tabpage" hidden>
+        <div id="chatMessages" class="chat"></div>
+        <div class="chat-input">
+          <textarea id="chatInput" placeholder="Message the running server…"></textarea>
+          <button id="btnSend" class="btn btn-primary">Send</button>
+        </div>
+      </div>
+
+      <div id="tab-info" class="tabpage" hidden>
+        <div class="help">
+          <h3>How to run</h3>
+          <p>Double-click <b>start.cmd</b> (or run <code>npm start</code> in the <code>gui</code> folder). Pick a model,
+             set the address, click <b>Start Server</b>, then chat on the Playground tab or from your phone at the
+             API address.</p>
+          <h3>Where do my models go?</h3>
+          <p>Put every <code>*.gguf</code> model and <code>*.mmproj</code> vision encoder in the <b>Models folder</b>
+             shown under Model. The app points there automatically and lists what it finds.</p>
+          <h3>MTP (Multi-Token Prediction)</h3>
+          <p>Faster generation using the MTP head built into the model (e.g. <code>unsloth/*-MTP-GGUF</code>).
+             Enable <b>MTP</b> to run <code>--spec-type draft-mtp --spec-draft-n-max N</code>.
+             If your model ships the MTP head as a separate file, set <b>MTP model file</b> and the app adds
+             <code>--spec-draft-model &lt;file&gt;</code>.
+             Incompatible with mmproj and parallel &gt; 1.</p>
+          <h3>DFlash (speculative decoding)</h3>
+          <p>Block-diffusion speculative decoding with a separate DFlash draft model. Attach a DFlash GGUF
+             (e.g. <code>Qwen3-4B-DFlash.gguf</code>) and enable <b>DFlash</b> to run
+             <code>--spec-type draft-dflash --spec-draft-model &lt;file&gt; --spec-draft-n-max N</code>.
+             DFlash is mutually exclusive with MTP and incompatible with mmproj.</p>
+          <h3>Recommended defaults</h3>
+          <p>Hover any <b>?</b> for an explanation. The pre-filled values (temp 1.0, top-k 40, repeat penalty 1.1,
+             context 8192, GPU layers 99, flash attention on) work well for most models. Click
+             <b>Reset all to recommended defaults</b> anytime.</p>
+          <h3>Presets</h3>
+          <p>Type a name, click <b>Save as preset</b> to snapshot all settings (model paths, image settings, address,
+             sampling). <b>Load</b> restores one. Presets are stored in <code>presets.json</code> next to the app.</p>
+          <h3>Switch models from your phone</h3>
+           <p>When the API address is set to a LAN/VPN interface, open that same address on your phone. You'll see every
+              preset and model in your Models folder. Tap one to stop the server and reload it with those settings.
+              The default localhost address is only reachable from this computer.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

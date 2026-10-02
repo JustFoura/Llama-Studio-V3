@@ -1,0 +1,38 @@
+# llama.cpp source + build artifacts (build it yourself, see README)
+/llama.cpp/
+
+# node / electron
+gui/node_modules/
+gui/dist/
+
+# Tauri V2 app
+app/node_modules/
+app/src-tauri/target/
+app/src-tauri/gen/schemas/
+
+# models and user data (never commit personal files)
+gui/models/
+gui/config.json
+gui/presets.json
+app/models/
+app/dist/
+app/config.json
+app/presets.json
+
+# Local credentials and environment overrides
+.env
+.env.*
+!.env.example
+
+# logs
+err.txt
+out.txt
+
+# misc
+.DS_Store
+Thumbs.db
+app/src-tauri/config.json
+
+# design scratch: pre-redesign backup and the preview harness's generated page
+.backup-original-ui/
+app/src/_shot.html

@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Llama Studio</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body data-server="idle" data-page="settings" data-engine="llamacpp">
+  <div class="window">
+
+    <!-- ============ BAR 1: identity + navigation ============ -->
+    <header class="bar1" data-tauri-drag-region>
+      <div class="bar1-left" data-tauri-drag-region>
+        <span class="chip" id="statusChip"><i class="chip-dot"></i><span id="statusChipText">Idle</span></span>
+        <span class="bar1-title" id="bar1Title">Llama Studio</span>
+      </div>
+
+      <nav class="tabs" id="tabs">
+        <div class="tab-glider" id="tabGlider"></div>
+        <button class="tab active" data-page="settings">Settings</button>
+        <button class="tab" data-page="logs">Logs</button>
+        <button class="tab" data-page="chat">Chat</button>
+      </nav>
+
+      <div class="bar1-right" data-tauri-drag-region>
+        <button class="icon-btn" id="btnSettings" title="Settings" aria-label="Settings"
+                aria-haspopup="true" aria-expanded="false" aria-controls="settingsMenu">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"
+               stroke-linecap="round" aria-hidden="true">
+            <path d="M2.5 5h11M2.5 11h11"/>
+            <circle cx="6" cy="5" r="1.7"/>
+            <circle cx="10.5" cy="11" r="1.7"/>
+          </svg>
+        </button>
+        <button class="close-circle" id="winClose" title="Close Llama Studio" aria-label="Close">
+          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M2 2l6 6M8 2l-6 6"/></svg>
+        </button>
+
+        <!-- settings popover -->
+        <div class="pop" id="settingsMenu" hidden>
+          <div class="pop-title">Interface</div>
+          <div class="pop-row">
+            <span class="pop-label">UI version</span>
+            <div class="seg" id="uiVersion" role="group" aria-label="UI version">
+              <button type="button" data-ui="v1" disabled title="Legacy Electron app in gui/; not part of this interface.">V1<em>legacy</em></button>
+              <button type="button" data-ui="v2" disabled title="Previous interface version; not maintained.">V2<em>archived</em></button>
+              <button type="button" data-ui="v3" class="active">V3</button>
+            </div>
+          </div>
+          <p class="pop-note">V3 is the current interface. V1 remains available as a separate legacy app under gui/.</p>
+        </div>
+      </div>
+    </header>
+
+    <!-- ============ BAR 2: run controls ============ -->
+    <div class="bar2-wrap" data-tauri-drag-region>
+      <div class="bar2">
+
+        <div class="bar2-left" data-tauri-drag-region>
+          <button id="btnPower" class="btn-power" title="Start or stop the inference server">
+            <span class="btn-power-dot"></span>
+            <span class="btn-power-label">Start</span>
+          </button>
+        </div>
+
+        <div class="bar2-center" data-tauri-drag-region>
+          <div class="engine-toggle" id="engineToggle" title="Choose which local inference server to launch.">
+            <button type="button" data-engine-opt="llamacpp" class="active">llama.cpp</button>
+            <button type="button" data-engine-opt="vllm">vLLM</button>
+            <button type="button" data-engine-opt="sglang">SGLang</button>
+          </div>
+        </div>
+
+        <div class="bar2-right" data-tauri-drag-region>
+          <div class="dial" id="dialPp" title="Prompt processing speed — tokens per second while the model reads the prompt.">
+            <svg class="dial-svg" viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="dial-track" cx="24" cy="24" r="20"></circle>
+              <circle class="dial-arc" id="arcPp" cx="24" cy="24" r="20"></circle>
+            </svg>
+            <span class="dial-value" id="valPp">—</span>
+            <span class="dial-label">prompt</span>
+          </div>
+
+          <div class="dial" id="dialDec" title="Generation speed — tokens per second while the model writes the answer.">
+            <svg class="dial-svg" viewBox="0 0 48 48" aria-hidden="true">
+              <circle class="dial-track" cx="24" cy="24" r="20"></circle>
+              <circle class="dial-arc" id="arcDec" cx="24" cy="24" r="20"></circle>
+            </svg>
+            <span class="dial-value" id="valDec">—</span>
+            <span class="dial-label">decode</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ PAGES ============ -->
+    <main class="pages">
+
+      <!-- ============ SETTINGS ============ -->
+      <section class="page page-active" id="page-settings">
+        <div class="pane">
+          <div class="pane-scroll" id="settingsSheet">
+
+            <div class="pane-status">
+              <b id="statusTitle">Server idle</b>
+              <span id="statusSub">Pick a model, then press Start.</span>
+            </div>
+
+            <!-- the launch command, always visible. Flags the app knows about
+                 update the fields below; anything typed here is kept and passed
+                 straight to the server. -->
+            <div class="cmd" id="argbar">
+              <span id="argText" class="argbar-text" contenteditable="plaintext-only" spellcheck="false"></span>
+              <p class="cmd-note">Click to edit. Anything you add goes straight to the server.</p>
+            </div>
+
+            <div class="presets-bar">
+              <span class="presets-label">Preset</span>
+              <div class="select" id="presetSelect">
+                <button type="button" class="select-btn" id="presetList"
+                        aria-haspopup="listbox" aria-expanded="false" title="Saved presets">
+                  <span id="presetListText">Preset…</span>
+                  <i class="select-caret" aria-hidden="true"></i>
+                </button>
+                <ul class="select-menu" id="presetMenu" role="listbox" aria-label="Saved presets" hidden></ul>
+              </div>
+              <input id="presetName" class="input" placeholder="new preset name" title="Name for a new preset" />
+              <button id="btnPresetSave" class="btn">Save</button>
+              <button id="btnPresetDelete" class="btn btn-danger">Delete</button>
+            </div>
+
+            <div class="stack">
+
+              <!-- ---------- MODEL ---------- -->
+              <section class="acc open" data-section="model">
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Model</span>
+                  <span class="acc-hint" id="navModel">not set</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Weights the selected server loads: a GGUF file, local Hugging Face folder, or repo ID.</p>
+                  </header>
+                  <div class="group">
+                    <label class="setting">
+                      <span class="setting-label"><span id="modelLabel">Model (.gguf)</span> <i class="tip" id="modelTip" title="The main language model, from your models folder.">?</i></span>
+                      <span class="setting-control control-row">
+                        <select id="model" class="input grow"></select>
+                        <button class="btn btn-icon" id="btnRefreshModels" title="Rescan models folder">&#8635;</button>
+                        <button class="btn" id="btnBrowseModel">Browse&#8230;</button>
+                      </span>
+                    </label>
+
+                    <label class="setting">
+                      <span class="setting-label"><span id="modelsDirLabel">Models folder</span> <i class="tip" id="modelsDirTip" title="Folder that holds your .gguf files.">?</i></span>
+                      <span class="setting-control control-row">
+                        <input type="text" data-field="modelsDir" class="input grow" placeholder="folder containing .gguf files" />
+                        <button class="btn" id="btnBrowseModelsDir">Browse&#8230;</button>
+                      </span>
+                    </label>
+
+                    <label class="setting" data-no-sglang>
+                      <span class="setting-label">Vision encoder (mmproj) <i class="tip" title="Only needed for vision models. Lets the model see images. Auto-detected next to your model when possible. llama.cpp: --mmproj &middot; vLLM: handed to the GGUF plugin automatically.">?</i></span>
+                      <span class="setting-control control-row">
+                        <input type="text" data-field="mmproj" class="input grow" placeholder="mmproj.gguf (optional)" />
+                        <button class="btn" id="btnBrowseMmproj">Browse&#8230;</button>
+                      </span>
+                    </label>
+
+                    <label class="setting">
+                      <span class="setting-label">HuggingFace repo <i class="tip" title="Serve a Hugging Face repo directly. llama.cpp downloads it (-hf); vLLM and SGLang accept a repo ID or local Hugging Face model folder.">?</i></span>
+                      <span class="setting-control">
+                        <input type="text" data-field="hfModel" class="input" placeholder="user/repo" />
+                      </span>
+                    </label>
+
+                    <label class="setting" id="ggufTokenizerField" data-vllm-only style="display: none;">
+                      <span class="setting-label">GGUF tokenizer <i class="tip" title="Only used for .gguf models: vLLM needs the original model's HuggingFace tokenizer (user/repo). Auto-detected from your HF cache, local models folder or huggingface.co when you pick a GGUF, and remembered per model.">?</i></span>
+                      <span class="setting-control">
+                        <input type="text" id="ggufTokenizer" class="input" placeholder="auto-detected, e.g. Qwen/Qwen3-0.6B" />
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- HARDWARE ---------- -->
+              <section class="acc" data-section="hardware" data-llama-only>
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Hardware</span>
+                  <span class="acc-hint" id="navLayers">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>VRAM allocation. Lower GPU layers if the model won't fit.</p>
+                  </header>
+                  <div class="group group-grid">
+                    <label class="setting">
+                      <span class="setting-label">GPU layers <i class="tip" title="Layers offloaded to VRAM (-ngl). 99 = all. Lower it if the model does not fit.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="ngl" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Cache K <i class="tip" title="KV cache precision for K. q8_0 balances speed, quality and VRAM; q4_0 buys more context room.">?</i></span>
+                      <span class="setting-control"><select data-field="cacheTypeK" class="input" data-options="cacheTypes"></select></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Cache V <i class="tip" title="KV cache precision for V. q8_0 balances speed, quality and VRAM; q4_0 buys more context room.">?</i></span>
+                      <span class="setting-control"><select data-field="cacheTypeV" class="input" data-options="cacheTypes"></select></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Threads <i class="tip" title="CPU threads during generation. 0 = auto.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="threads" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Batch threads <i class="tip" title="CPU threads during prompt processing. 0 = auto.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="threadsBatch" class="input" /></span>
+                    </label>
+                  </div>
+                  <div class="group">
+                    <label class="switch-row">
+                      <span class="switch-name">Flash attention <i class="tip" title="Faster and more memory-efficient attention. Keep ON. (-fa)">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="flashAttention" /><i></i></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- CONTEXT ---------- -->
+              <section class="acc" data-section="context">
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Context</span>
+                  <span class="acc-hint" id="navContext">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>History window, in tokens. Sets KV cache size.</p>
+                  </header>
+                  <div class="ctx" id="ctxSlider">
+                    <div class="ctx-labels">
+                      <span class="ctx-hint">Faster / Lighter</span>
+                      <b id="ctxValue">8,192</b>
+                      <span class="ctx-hint">Slower / Heavier</span>
+                    </div>
+                    <div class="ctx-track" id="ctxTrack">
+                      <div class="ctx-rail"></div>
+                      <div class="ctx-fill" id="ctxFill"></div>
+                      <div class="ctx-ticks" id="ctxTicks"></div>
+                      <div class="ctx-thumb" id="ctxThumb"></div>
+                    </div>
+                    <div class="ctx-scale" id="ctxScale" aria-hidden="true"></div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- THROUGHPUT ---------- -->
+              <section class="acc" data-section="throughput">
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Throughput</span>
+                  <span class="acc-hint" id="navThroughput">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Batch size and speculative decoding. Higher is faster, costs memory.</p>
+                  </header>
+                  <div class="group group-grid">
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">Batch <i class="tip" title="Prompt processing batch size (-b). Larger is faster but uses more memory.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="batchSize" class="input" /></span>
+                    </label>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">UBatch <i class="tip" title="Micro-batch size (-ub).">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="ubatch" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Parallel slots <i class="tip" title="Concurrent requests: llama.cpp -np / vLLM --max-num-seqs. More slots share the same context budget.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="parallel" class="input" /></span>
+                    </label>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">Cache reuse <i class="tip" title="Reuse cached context chunks even when the prompt changed mid-way (--cache-reuse). Stops coding agents from reprocessing the whole context on every edit. Value = smallest chunk worth shifting, in tokens. 0 = off.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="cacheReuse" class="input" /></span>
+                    </label>
+                  </div>
+                  <div class="group" data-no-sglang>
+                    <div class="group-title">MTP <span class="group-note">multi-token prediction head</span></div>
+                    <label class="switch-row">
+                      <span class="switch-name">Enable MTP <i class="tip" title="Use an MTP head embedded in the model. vLLM supports embedded MTP only; llama.cpp can also load a separate head file. Mutually exclusive with DFlash; llama.cpp also disallows mmproj and parallel requests.">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="mtpEnabled" /><i></i></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Draft tokens <i class="tip" title="Draft tokens per step (vLLM: num_speculative_tokens).">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="mtpNMax" class="input" /></span>
+                    </label>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">Head file <i class="tip" title="Separate MTP head .gguf, only if not built into the model. (--spec-draft-model)">?</i></span>
+                      <span class="setting-control control-row">
+                        <input type="text" data-field="mtpModel" class="input grow" placeholder="built-in (optional)" />
+                        <button class="btn" id="btnBrowseMtp">Browse&#8230;</button>
+                      </span>
+                    </label>
+                  </div>
+                  <div class="group" data-no-sglang>
+                    <div class="group-title">DFlash <span class="group-note">block-diffusion draft model</span></div>
+                    <label class="switch-row">
+                      <span class="switch-name">Enable DFlash <i class="tip" title="Block-diffusion speculative decoding with a DFlash/DFlash2 draft model (llama.cpp: --spec-type draft-dflash &middot; vLLM: --speculative-config draft_model). Mutually exclusive with MTP.">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="dflashEnabled" /><i></i></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Draft tokens <i class="tip" title="Draft tokens per step (vLLM: num_speculative_tokens). llama.cpp clamps it to the draft model's trained block size.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="dflashNMax" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Draft model <i class="tip" title="The DFlash draft model. llama.cpp: a local .gguf file (e.g. Qwen3.8-27B-DFlash2-Q8_0.gguf). vLLM: the safetensors HF repo id (e.g. incoai/Qwen3.8-27B-DFlash2) or a local HF-format folder - it can't read .gguf drafters.">?</i></span>
+                      <span class="setting-control control-row">
+                        <input type="text" data-field="dflashModel" class="input grow" placeholder="Qwen3-4B-DFlash.gguf" />
+                        <button class="btn" id="btnBrowseDflash">Browse&#8230;</button>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- SAMPLING ---------- -->
+              <section class="acc" data-section="sampling">
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Sampling</span>
+                  <span class="acc-hint" id="navTemp">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Per-token selection. Defaults suit most chat.</p>
+                  </header>
+                  <div class="group group-grid">
+                    <label class="setting">
+                      <span class="setting-label">Temperature <i class="tip" title="Randomness. Higher = more creative.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="temp" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Top-P <i class="tip" title="Nucleus sampling cutoff.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="topP" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Top-K <i class="tip" title="Only sample from the top K tokens. 0 = off.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="topK" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Min-P <i class="tip" title="Ignore tokens below this probability.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="minP" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Repeat penalty <i class="tip" title="Penalize repetition. 1.0 = off.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="repeatPenalty" class="input" /></span>
+                    </label>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">Presence penalty <i class="tip" title="Penalize tokens already used. vLLM has no server-side default for this - it is set per request.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="presencePenalty" class="input" /></span>
+                    </label>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label">Frequency penalty <i class="tip" title="Penalize frequently used tokens. vLLM has no server-side default for this - it is set per request.">?</i></span>
+                      <span class="setting-control"><input type="number" step="0.01" data-field="frequencyPenalty" class="input" /></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- REASONING ---------- -->
+              <section class="acc" data-section="reasoning" data-llama-only>
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Reasoning</span>
+                  <span class="acc-hint" id="navReasoning">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Thinking-trace controls. Reasoning-capable models only.</p>
+                  </header>
+                  <div class="group">
+                    <label class="setting">
+                      <span class="setting-label">Mode <i class="tip" title="auto = model decides, on = always think, off = never think.">?</i></span>
+                      <span class="setting-control"><select data-field="reasoning" class="input" data-options="reasoningModes"></select></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Budget <i class="tip" title="Max thinking tokens. -1 = unlimited.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="reasoningBudget" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Effort <i class="tip" title="Reasoning effort for models that support it (Qwen3.8, gpt-oss, DeepSeek V4...). Passed via --chat-template-kwargs. Default = model's own.">?</i></span>
+                      <span class="setting-control"><select data-field="reasoningEffort" class="input" data-options="efforts"></select></span>
+                    </label>
+                    <label class="switch-row">
+                      <span class="switch-name">Preserve thinking trace <i class="tip" title="Keep the full thinking text in the conversation history. (--reasoning-preserve)">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="preserveReasoning" /><i></i></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- VISION ---------- -->
+              <section class="acc" data-section="vision" data-llama-only>
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Vision</span>
+                  <span class="acc-hint" id="navVision">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Image input settings.</p>
+                  </header>
+                  <div class="group">
+                    <label class="switch-row">
+                      <span class="switch-name">Offload encoder to GPU <i class="tip" title="Run the vision encoder on the GPU. Keep ON unless out of VRAM.">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="mmprojOffload" /><i></i></span>
+                    </label>
+                  </div>
+                  <div class="group group-grid">
+                    <label class="setting">
+                      <span class="setting-label">Image min tokens <i class="tip" title="Minimum tokens per image. -1 = model default.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="imageMinTokens" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Image max tokens <i class="tip" title="Max tokens per image. Higher = better quality, more VRAM. -1 = default.">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="imageMaxTokens" class="input" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">Encode batch <i class="tip" title="Image tokens processed per batch (--mtmd-batch-max-tokens).">?</i></span>
+                      <span class="setting-control"><input type="number" data-field="mtmdBatchMaxTokens" class="input" /></span>
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              <!-- ---------- NETWORK ---------- -->
+              <section class="acc" data-section="network">
+                <button class="acc-head">
+                  <i class="acc-caret" aria-hidden="true"></i>
+                  <span class="acc-name">Network</span>
+                  <span class="acc-hint" id="navServer">—</span>
+                </button>
+                <div class="acc-body">
+                  <header class="section-head">
+                    <p>Listen address, access, and server binary.</p>
+                  </header>
+                  <div class="group">
+                    <label class="setting">
+                      <span class="setting-label">API address <i class="tip" title="The server binds to this host and port. Localhost is the safe default. Choose a specific LAN address only when you intend to allow other devices to connect.">?</i></span>
+                      <span class="setting-control"><input type="text" data-field="apiAddress" class="input" placeholder="http://127.0.0.1:1234" /></span>
+                    </label>
+                    <label class="setting">
+                      <span class="setting-label">API key <i class="tip" title="Optional bearer token for server requests. It is stored in your user config and masked in the command preview/log.">?</i></span>
+                      <span class="setting-control"><input type="password" data-field="apiKey" class="input" autocomplete="new-password" placeholder="optional" /></span>
+                    </label>
+                    <p class="note">Without an API key, requests are unauthenticated. Keep the server on localhost unless access is protected by an API key, firewall, or tailnet policy.</p>
+                    <label class="setting" data-llama-only>
+                      <span class="setting-label"><span id="serverPathLabel">llama-server path</span> <i class="tip" id="serverPathTip" title="Path to llama-server.exe. Auto-detected; only change if you moved it.">?</i></span>
+                      <span class="setting-control control-row">
+                        <input type="text" data-field="serverPath" class="input grow" />
+                        <button class="btn" id="btnBrowseServer">Browse&#8230;</button>
+                      </span>
+                    </label>
+                    <label class="setting" data-vllm-only>
+                      <span class="setting-label">vLLM command <i class="tip" title="Command that launches the vLLM server. Usually just `vllm` from your PATH; can be a full path or a wrapper script.">?</i></span>
+                      <span class="setting-control"><input type="text" data-field="vllmPath" class="input" placeholder="vllm" /></span>
+                    </label>
+                    <label class="setting" data-sglang-only>
+                      <span class="setting-label">Python command <i class="tip" title="Python interpreter with SGLang installed. The app runs `python -m sglang.launch_server`.">?</i></span>
+                      <span class="setting-control"><input type="text" data-field="sglangPath" class="input" placeholder="python3" /></span>
+                    </label>
+                  </div>
+                  <div class="group">
+                    <label class="switch-row">
+                      <span class="switch-name">Tailscale-only access <i class="tip" title="Bind the inference API only to this computer's active Tailscale IP. Tailscale must be installed, connected, and signed in. Use your tailnet access policy to restrict access to your phone.">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="tailscaleOnly" /><i></i></span>
+                    </label>
+                    <p class="note">When on, the API listens only on this computer's Tailscale address. Devices allowed by your tailnet policy can connect; restrict that policy to your phone if other devices are in your tailnet.</p>
+                    <label class="switch-row" data-llama-only>
+                      <span class="switch-name">Jinja chat template <i class="tip" title="Use the model's own chat template (--jinja). Keep ON for modern models. vLLM always uses the model's template.">?</i></span>
+                      <span class="switch"><input type="checkbox" data-field="jinja" /><i></i></span>
+                    </label>
+                  </div>
+                  <div class="group">
+                    <button id="btnResetDefaults" class="btn btn-danger">Reset all settings to defaults</button>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LOGS ============ -->
+      <section class="page" id="page-logs">
+        <div class="logs-head">
+          <div class="logs-filters">
+            <button class="chipbtn active" data-filter="all">All</button>
+            <button class="chipbtn" data-filter="info">Info</button>
+            <button class="chipbtn" data-filter="stdout">Server</button>
+            <button class="chipbtn" data-filter="error">Errors</button>
+          </div>
+          <div class="search">
+            <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3"
+                 aria-hidden="true"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2L12.5 12.5" stroke-linecap="round"/></svg>
+            <input id="logSearch" type="text" placeholder="Filter lines" spellcheck="false" />
+          </div>
+          <div class="grow"></div>
+          <span class="logs-count" id="logsCount">0 lines</span>
+          <label class="check-inline"><input type="checkbox" id="logAutoscroll" checked /> Follow</label>
+          <button id="btnClearLogs" class="btn">Clear</button>
+        </div>
+        <div class="log-wrap">
+          <div class="log" id="log" data-filter="all"></div>
+          <button class="jump-latest" id="btnJumpLatest" hidden>Jump to latest ↓</button>
+        </div>
+      </section>
+
+      <!-- ============ CHAT ============ -->
+      <section class="page" id="page-chat">
+        <div class="chat">
+          <div class="chat-head">
+            <div class="chat-head-in">
+              <span class="chat-model" id="chatModel">no model</span>
+              <span class="chat-dot" id="chatState"></span>
+              <div class="grow"></div>
+              <button class="btn" id="btnClearChat">Clear</button>
+            </div>
+          </div>
+
+          <div class="chat-log" id="chatLog">
+            <div class="chat-empty" id="chatEmpty">
+              <p>Start the server, then send a message. Conversations use the model and address set under <b>Model</b> and <b>Network</b>.</p>
+            </div>
+          </div>
+
+          <form class="composer" id="chatForm">
+            <textarea id="chatInput" rows="1" placeholder="Message the model…"
+                      spellcheck="false" aria-label="Message"></textarea>
+            <button type="submit" class="btn-send" id="btnSend" title="Send (Enter)">Send</button>
+            <button type="button" class="btn-stop" id="btnStopChat" hidden>Stop</button>
+          </form>
+        </div>
+      </section>
+
+    </main>
+  </div>
+  <script src="perf.js" defer></script>
+  <script src="main.js" defer></script>
+</body>
+</html>

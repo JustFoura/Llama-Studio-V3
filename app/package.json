@@ -1,0 +1,13 @@
+{
+  "name": "llama-studio",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "test:ui": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

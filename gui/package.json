@@ -1,0 +1,50 @@
+{
+  "name": "llama-studio",
+  "version": "0.1.0",
+  "description": "LM Studio-like developer GUI for llama.cpp (llama-server)",
+  "main": "main.js",
+  "author": "JustFoura <JustFoura.dev@proton.me>",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win portable",
+    "dist:dir": "electron-builder --win dir"
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.llamastudio.app",
+    "productName": "Llama Studio",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../llama.cpp/build/bin",
+        "to": "bin"
+      }
+    ],
+    "electronDist": "node_modules/electron/dist",
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "LlamaStudio-${version}-portable.exe"
+    }
+  }
+}
